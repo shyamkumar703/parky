@@ -51,8 +51,8 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         // 37.7749, -122.4194
         // 37.779129, -122.446135
-//        let loc = CLLocationCoordinate2DMake(37.778632, -122.446534)
-//        self.currentParkingLocationWA = .init(location: loc, accuracy: 10)
+//        let loc = CLLocationCoordinate2DMake(37.779465, -122.446212)
+//        self.currentParkingLocationWA = .init(location: loc, accuracy: 1)
         calculateStreetCleaningDate()
         userLocationManager.requestLocation()
     }
@@ -66,7 +66,7 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 self.isLoadingCleaningDate = false
                 switch result {
                 case .success(let streetCleaningTimes):
-                    self.streetCleaningDate = streetCleaningTimes.nextCleaning(near: currentParkingLocationWA.location)
+                    self.streetCleaningDate = streetCleaningTimes.nextCleaning(near: currentParkingLocationWA.location, accuracy: currentParkingLocationWA.accuracy)
                     if let date = self.streetCleaningDate {
                         Logger.shared.info("Next cleaning date resolved: \(date)")
                     } else {
@@ -167,7 +167,7 @@ struct ContentView: View {
         } else if hoursUntil <= 2 {
             return .red
         } else if hoursUntil <= 12 {
-            return .yellow
+            return .red.opacity(0.7)
         } else {
             return nil
         }
@@ -241,6 +241,9 @@ struct ContentView: View {
             .padding()
         }
         .onAppear {
+            vm.onAppear()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             vm.onAppear()
         }
         .sheet(isPresented: $showDebugLogs) {

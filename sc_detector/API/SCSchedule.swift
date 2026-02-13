@@ -156,8 +156,8 @@ struct StreetCleaningSchedule: Codable {
 extension Array where Element == StreetCleaningSchedule {
     /// Returns the soonest upcoming cleaning, filtered to the nearest street and matching side
     /// if `parkingLocation` is provided and line geometry is available.
-    func nextCleaning(after date: Date = Date(), near parkingLocation: CLLocationCoordinate2D? = nil) -> Date? {
-        let filtered = filteredByLocation(parkingLocation)
+    func nextCleaning(after date: Date = Date(), near parkingLocation: CLLocationCoordinate2D? = nil, accuracy: CLLocationAccuracy = 0) -> Date? {
+        let filtered = filteredByLocation(parkingLocation, accuracy: accuracy)
 
         for (i, schedule) in self.enumerated() {
             let next = schedule.nextCleaning(after: date)
@@ -178,7 +178,7 @@ extension Array where Element == StreetCleaningSchedule {
     }
 
     /// Filters schedules to the nearest street and matching side of the centerline.
-    private func filteredByLocation(_ parkingLocation: CLLocationCoordinate2D?) -> [StreetCleaningSchedule] {
+    private func filteredByLocation(_ parkingLocation: CLLocationCoordinate2D?, accuracy: CLLocationAccuracy) -> [StreetCleaningSchedule] {
         guard let parkingLocation else { return self }
 
         let withDistances: [(schedule: StreetCleaningSchedule, distance: Double, closestPoint: CLLocationCoordinate2D)] = self.compactMap { schedule in
@@ -201,9 +201,9 @@ extension Array where Element == StreetCleaningSchedule {
 
         guard let nearest = nearestStreet.min(by: { $0.distance < $1.distance }) else { return self }
 
-        // If parking point is very close to centerline, can't reliably determine side
-        if nearest.distance < 5 {
-            Logger.shared.warning("Parking point is \(String(format: "%.1f", nearest.distance))m from centerline — too close to determine side, using all \(nearestStreet.count) nearby schedules")
+        // If parking point is within GPS accuracy of centerline, can't reliably determine side
+        if nearest.distance < accuracy {
+            Logger.shared.warning("Parking point is \(String(format: "%.1f", nearest.distance))m from centerline but accuracy is \(String(format: "%.1f", accuracy))m — too uncertain to determine side, using all \(nearestStreet.count) nearby schedules")
             return nearestStreet.map(\.schedule)
         }
 

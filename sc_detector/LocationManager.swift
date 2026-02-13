@@ -43,7 +43,7 @@ class LocationManager: NSObject {
         apiService.getStreetCleaningTimes(location: location, radius: accuracy) { [weak self] result in
             switch result {
             case .success(let schedules):
-                if let nextCleaning = schedules.nextCleaning(near: location) {
+                if let nextCleaning = schedules.nextCleaning(near: location, accuracy: accuracy) {
                     Logger.shared.info("Next cleaning: \(nextCleaning), scheduling notification 1hr before")
                     self?.notificationManager.scheduleLocalNotification(
                         title: "Move your car!",
