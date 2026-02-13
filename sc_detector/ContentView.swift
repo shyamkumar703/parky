@@ -102,6 +102,30 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 //    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
+struct GlassModifier<S: Shape>: ViewModifier {
+    let tint: Color?
+    let shape: S
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            if let tint {
+                content.glassEffect(.regular.tint(tint), in: shape)
+            } else {
+                content.glassEffect(.regular, in: shape)
+            }
+        } else {
+            if let tint {
+                content
+                    .background(tint.opacity(0.3), in: shape)
+                    .background(.ultraThinMaterial, in: shape)
+            } else {
+                content
+                    .background(.ultraThinMaterial, in: shape)
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var vm = AppViewModel()
     @State private var isTimerPressed = false
@@ -193,7 +217,7 @@ struct ContentView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular, in: .circle)
+                    .modifier(GlassModifier(tint: nil, shape: .circle))
                 }
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -206,7 +230,7 @@ struct ContentView: View {
                         .animation(.default, value: text)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
-                        .glassEffect(tint.map { .regular.tint($0) } ?? .regular, in: .capsule)
+                        .modifier(GlassModifier(tint: tint, shape: .capsule))
                 }
                     .scaleEffect(isTimerPressed ? 0.93 : 1.0)
                     .animation(.spring(duration: 0.2), value: isTimerPressed)
@@ -227,7 +251,7 @@ struct ContentView: View {
                             .padding(.vertical, 12)
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(.blue), in: .capsule)
+                    .modifier(GlassModifier(tint: .blue, shape: .capsule))
                     .scaleEffect(isButtonPressed ? 0.93 : 1.0)
                     .animation(.spring(duration: 0.2), value: isButtonPressed)
                     .sensoryFeedback(.impact(weight: .medium), trigger: isButtonPressed)
