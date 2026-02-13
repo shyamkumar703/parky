@@ -39,6 +39,7 @@ class LocationManager: NSObject {
         Logger.shared.info("Handling parking at \(location.latitude), \(location.longitude) (accuracy: \(accuracy)m)")
         notificationManager.clearAllScheduledNotifications()
         localStorageService.saveParkingLocation(location: .init(location: location, accuracy: accuracy))
+        // TODO: - remove noti for prod; testing only
         notificationManager.sendLocalNotification(title: "Parked", subtitle: "\(location) with accuracy \(accuracy)")
         apiService.getStreetCleaningTimes(location: location, radius: accuracy) { [weak self] result in
             switch result {
@@ -83,13 +84,14 @@ extension LocationManager: CLLocationManagerDelegate {
         let now = Date()
         if visit.departureDate > now {
             Logger.shared.info("Visit: ARRIVAL at \(visit.coordinate.latitude), \(visit.coordinate.longitude) (accuracy: \(visit.horizontalAccuracy)m)")
-            wasRecentlyDriving(before: visit.arrivalDate) { [weak self] wasDriving in
-                if wasDriving {
-                    self?.handleParking(location: visit.coordinate, accuracy: visit.horizontalAccuracy)
-                } else {
-                    Logger.shared.info("Arrival ignored — user was not driving")
-                }
-            }
+            handleParking(location: visit.coordinate, accuracy: visit.horizontalAccuracy)
+//            wasRecentlyDriving(before: visit.arrivalDate) { [weak self] wasDriving in
+//                if wasDriving {
+//                    self?.handleParking(location: visit.coordinate, accuracy: visit.horizontalAccuracy)
+//                } else {
+//                    Logger.shared.info("Arrival ignored — user was not driving")
+//                }
+//            }
         } else {
             Logger.shared.info("Visit: DEPARTURE from \(visit.coordinate.latitude), \(visit.coordinate.longitude)")
             notificationManager.clearAllScheduledNotifications()

@@ -10,6 +10,16 @@ import CoreLocation
 import MapKit
 import SwiftUI
 
+/*
+ PRIORITY LIST:
+ 1. we need to have a way to pop and add locations to the history stack
+    for example, if the user parked their car and we put their location down. then they walk
+    somewhere and that triggers as a "park" event, we need to notify that we're tracking a park event
+    and allow them to "pop" off the top of the stack as many times as possible. we also need an undo/redo
+ 2. all permissions handling with dedicated views (like an onboarding)
+ 3. landing view (with some kind of shader animation?) OR maybe I can use the start car idea I had before that might be cool
+ */
+
 class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager: LocationManager
     private let notificationManager: NotificationManager
