@@ -31,6 +31,7 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var streetCleaningDate: Date?
     @Published private(set) var isLoadingCleaningDate = false
     @Published private(set) var userLocation: CLLocationCoordinate2D?
+    private var lastUserLocation: CLLocation?
 
     private let userLocationManager = CLLocationManager()
 
@@ -45,7 +46,8 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        userLocation = locations.last?.coordinate
+        lastUserLocation = locations.last
+        userLocation = lastUserLocation?.coordinate
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -94,8 +96,24 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         withAnimation {
             self.currentParkingLocationWA = nil
         }
+        streetCleaningDate = nil
         localStorageService.clearParkingLocation()
         notificationManager.clearAllScheduledNotifications()
+        locationManager.clearParking()
+    }
+
+    func onImParkedHereTapped() {
+        guard let location = lastUserLocation else {
+            Logger.shared.warning("Bootstrap tapped but no user location available")
+            return
+        }
+        Logger.shared.info("User tapped 'I'm parked here' at \(location.coordinate.latitude), \(location.coordinate.longitude) (accuracy: \(location.horizontalAccuracy)m)")
+        let parking = CLLocationWithAccuracy(location: location.coordinate, accuracy: location.horizontalAccuracy)
+        withAnimation {
+            self.currentParkingLocationWA = parking
+        }
+        locationManager.setInitialParking(location: location.coordinate, accuracy: location.horizontalAccuracy)
+        calculateStreetCleaningDate()
     }
 
     // MARK: - CLLocationManagerDelegate (DEBUG)
@@ -250,27 +268,29 @@ struct ContentView: View {
                             .onChanged { _ in isTimerPressed = true }
                             .onEnded { _ in isTimerPressed = false }
                     )
-                if vm.currentParkingLocationWA != nil {
-                    Button {
+                Button {
+                    if vm.currentParkingLocationWA != nil {
                         vm.onIMovedMyCarTapped()
-                    } label: {
-                        Text("I moved my car")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
+                    } else {
+                        vm.onImParkedHereTapped()
                     }
-                    .buttonStyle(.plain)
-                    .modifier(GlassModifier(tint: .blue, shape: .capsule))
-                    .scaleEffect(isButtonPressed ? 0.93 : 1.0)
-                    .animation(.spring(duration: 0.2), value: isButtonPressed)
-                    .sensoryFeedback(.impact(weight: .medium), trigger: isButtonPressed)
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in isButtonPressed = true }
-                            .onEnded { _ in isButtonPressed = false }
-                    )
+                } label: {
+                    Text(vm.currentParkingLocationWA != nil ? "I moved my car" : "I'm parked here")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
                 }
+                .buttonStyle(.plain)
+                .modifier(GlassModifier(tint: .blue, shape: .capsule))
+                .scaleEffect(isButtonPressed ? 0.93 : 1.0)
+                .animation(.spring(duration: 0.2), value: isButtonPressed)
+                .sensoryFeedback(.impact(weight: .medium), trigger: isButtonPressed)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isButtonPressed = true }
+                        .onEnded { _ in isButtonPressed = false }
+                )
             }
             .padding()
         }
