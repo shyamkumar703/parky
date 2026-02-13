@@ -15,7 +15,8 @@ class SCAPIService {
         radius: CLLocationAccuracy,
         completion: @escaping (Result<[StreetCleaningSchedule], Error>) -> Void
     ) {
-        let query = "$where=within_circle(line,\(location.latitude),\(location.longitude),\(radius))"
+        let searchRadius = max(radius, 100) // street centerlines can be 10-30m from parked position
+        let query = "$where=within_circle(line,\(location.latitude),\(location.longitude),\(searchRadius))"
         guard let url = URL(string: "\(baseURL)?\(query)") else {
             completion(.failure(URLError(.badURL)))
             return

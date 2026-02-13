@@ -403,6 +403,7 @@
 				INFOPLIST_FILE = "sc-detector-Info.plist";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to detect where you've parked";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to detect where you've parked";
+				INFOPLIST_KEY_NSMotionUsageDescription = "We use this to detect when you park your car";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -438,6 +439,7 @@
 				INFOPLIST_FILE = "sc-detector-Info.plist";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to detect where you've parked";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to detect where you've parked";
+				INFOPLIST_KEY_NSMotionUsageDescription = "We use this to detect when you park your car";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

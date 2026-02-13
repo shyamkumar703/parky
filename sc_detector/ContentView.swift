@@ -17,12 +17,13 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let localStorageService: LocalStorageService
     @Published private(set) var currentParkingLocationWA: CLLocationWithAccuracy?
     // uncomment below for sim
-    //    @Published private(set) var streetCleaningDate: Date? = Calendar.current.date(byAdding: .hour, value: -1, to: Date())
+//        @Published private(set) var streetCleaningDate: Date? = Calendar.current.date(byAdding: .hour, value: 1, to: Date())
     @Published private(set) var streetCleaningDate: Date?
+    @Published private(set) var isLoadingCleaningDate = false
 
 
     // DEBUG
-    private let debugLocationManager = CLLocationManager()
+//    private let debugLocationManager = CLLocationManager()
 
     override init() {
         self.locationManager = Dependencies.locationManager
@@ -30,40 +31,57 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         self.apiService = Dependencies.apiService
         self.localStorageService = Dependencies.localStorageService
         super.init()
-        debugLocationManager.delegate = self
+//        debugLocationManager.delegate = self
     }
 
     func onAppear() {
         self.currentParkingLocationWA = localStorageService.getParkingLocation()
+        // 37.7749, -122.4194
+        // 37.779129, -122.446135
+//        let loc = CLLocationCoordinate2DMake(37.779129, -122.446135)
+//        self.currentParkingLocationWA = .init(location: loc, accuracy: 10)
+        calculateStreetCleaningDate()
         // DEBUG: request location to simulate a nearby parked car
-        debugLocationManager.requestLocation()
+//        debugLocationManager.requestLocation()
     }
     
     private func calculateStreetCleaningDate() {
         guard let currentParkingLocationWA else { return }
+        isLoadingCleaningDate = true
         apiService.getStreetCleaningTimes(location: currentParkingLocationWA.location, radius: currentParkingLocationWA.accuracy) { [weak self] result in
             guard let self else { return }
-            switch result {
-            case .success(let streetCleaningTimes):
-                self.streetCleaningDate = streetCleaningTimes.nextCleaning()
-            case .failure(let error):
-                print(error)
+            DispatchQueue.main.async {
+                self.isLoadingCleaningDate = false
+                switch result {
+                case .success(let streetCleaningTimes):
+                    self.streetCleaningDate = streetCleaningTimes.nextCleaning()
+                case .failure(let error):
+                    print(error)
+                }
             }
         }
     }
-
-    // MARK: - CLLocationManagerDelegate (DEBUG)
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.first else { return }
-        // Offset by ~200m
-        let parked = CLLocationCoordinate2D(
-            latitude: location.coordinate.latitude + 0.002,
-            longitude: location.coordinate.longitude + 0.001
-        )
-        self.currentParkingLocationWA = .init(location: parked, accuracy: 0)
+    
+    func onIMovedMyCarTapped() {
+        withAnimation {
+            self.currentParkingLocationWA = nil
+        }
+        localStorageService.clearParkingLocation()
+        notificationManager.clearAllScheduledNotifications()
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    // MARK: - CLLocationManagerDelegate (DEBUG)
+//    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+//        guard let location = locations.first else { return }
+//        // Offset by ~200m
+//        let parked = CLLocationCoordinate2D(
+//            latitude: location.coordinate.latitude + 0.002,
+//            longitude: location.coordinate.longitude + 0.001
+//        )
+//        self.currentParkingLocationWA = .init(location: parked, accuracy: 0)
+//    }
+//
+//    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
 struct ContentView: View {
@@ -79,30 +97,38 @@ struct ContentView: View {
         }
     }
     
-    private var pillText: String {
-        guard vm.currentParkingLocationWA != nil,
-              let cleaningDate = vm.streetCleaningDate else {
+    private func pillText(now: Date) -> String {
+        guard vm.currentParkingLocationWA != nil else {
             return "No ticket risk"
         }
-        let interval = cleaningDate.timeIntervalSince(Date())
+        if vm.isLoadingCleaningDate {
+            return "Loading..."
+        }
+        guard let cleaningDate = vm.streetCleaningDate else {
+            return "No ticket risk"
+        }
+        let interval = cleaningDate.timeIntervalSince(now)
         guard interval > 0 else { return "TICKET RISK" }
-        let hours = Int(interval) / 3600
-        let minutes = (Int(interval) % 3600) / 60
-        let days = hours / 24
-        let remainingHours = hours % 24
+        let total = Int(interval)
+        let days = total / 86400
+        let hours = (total % 86400) / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
         if days > 0 {
-            return "Street cleaning in \(days)d \(remainingHours)hr \(minutes)min"
+            return "Street cleaning in \(days)d \(hours)hr \(minutes)m"
+        } else if hours > 0 {
+            return "Street cleaning in \(hours)hr \(minutes)m"
         } else {
-            return "Street cleaning in \(remainingHours)hr \(minutes)min"
+            return "Street cleaning in \(minutes)m \(seconds)s"
         }
     }
 
-    private var pillTint: Color? {
+    private func pillTint(now: Date) -> Color? {
         guard vm.currentParkingLocationWA != nil,
               let cleaningDate = vm.streetCleaningDate else {
             return .green
         }
-        let hoursUntil = cleaningDate.timeIntervalSince(Date()) / 3600
+        let hoursUntil = cleaningDate.timeIntervalSince(now) / 3600
         if hoursUntil <= 0 {
             return .red
         } else if hoursUntil <= 2 {
@@ -125,37 +151,47 @@ struct ContentView: View {
             }
             VStack(spacing: 16) {
                 Spacer()
-                Text(pillText)
-                    .font(.system(size: 14))
-                    .fontDesign(.monospaced)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .glassEffect(pillTint.map { .regular.tint($0) } ?? .regular, in: .capsule)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let text = pillText(now: context.date)
+                    let tint = pillTint(now: context.date)
+                    Text(text)
+                        .font(.system(size: 14))
+                        .fontDesign(.monospaced)
+                        .contentTransition(.numericText())
+                        .animation(.default, value: text)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .glassEffect(tint.map { .regular.tint($0) } ?? .regular, in: .capsule)
+                }
                     .scaleEffect(isTimerPressed ? 0.93 : 1.0)
                     .animation(.spring(duration: 0.2), value: isTimerPressed)
+                    .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.4), trigger: isTimerPressed)
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in isTimerPressed = true }
                             .onEnded { _ in isTimerPressed = false }
                     )
-                Button {
-
-                } label: {
-                    Text("I moved my car")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
+                if vm.currentParkingLocationWA != nil {
+                    Button {
+                        vm.onIMovedMyCarTapped()
+                    } label: {
+                        Text("I moved my car")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(.blue), in: .capsule)
+                    .scaleEffect(isButtonPressed ? 0.93 : 1.0)
+                    .animation(.spring(duration: 0.2), value: isButtonPressed)
+                    .sensoryFeedback(.impact(weight: .medium), trigger: isButtonPressed)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in isButtonPressed = true }
+                            .onEnded { _ in isButtonPressed = false }
+                    )
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(.blue), in: .capsule)
-                .scaleEffect(isButtonPressed ? 0.93 : 1.0)
-                .animation(.spring(duration: 0.2), value: isButtonPressed)
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in isButtonPressed = true }
-                        .onEnded { _ in isButtonPressed = false }
-                )
             }
             .padding()
         }
