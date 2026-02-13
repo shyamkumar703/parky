@@ -36,7 +36,7 @@ class LocationManager: NSObject {
 
     private func handleParking(location: CLLocationCoordinate2D, accuracy: CLLocationAccuracy) {
         notificationManager.clearAllScheduledNotifications()
-        localStorageService.saveParkingLocation(location: location)
+        localStorageService.saveParkingLocation(location: .init(location: location, accuracy: accuracy))
         notificationManager.sendLocalNotification(title: "Parked", subtitle: "\(location) with accuracy \(accuracy)")
         apiService.getStreetCleaningTimes(location: location, radius: accuracy) { [weak self] result in
             guard let schedules = try? result.get(),

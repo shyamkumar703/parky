@@ -7,28 +7,35 @@
 
 import CoreLocation
 
-fileprivate struct CLLocation2DRaw: Codable {
+fileprivate struct CLLocationWithAccuracyRaw: Codable {
     let lat: Double
     let long: Double
+    let accuracy: CLLocationAccuracy
     
-    init(_ location: CLLocationCoordinate2D) {
-        self.lat = location.latitude
-        self.long = location.longitude
+    init(_ locationWA: CLLocationWithAccuracy) {
+        self.lat = locationWA.location.latitude
+        self.long = locationWA.location.longitude
+        self.accuracy = locationWA.accuracy
     }
+}
+
+struct CLLocationWithAccuracy {
+    let location: CLLocationCoordinate2D
+    let accuracy: CLLocationAccuracy
 }
 
 class LocalStorageService {
     init() { }
     
-    func saveParkingLocation(location: CLLocationCoordinate2D) {
+    func saveParkingLocation(location: CLLocationWithAccuracy) {
         UserDefaults.standard.set(location.toRaw().toDictionary(), forKey: Key.parkedLocation.rawValue)
     }
     
-    func getParkingLocation() -> CLLocationCoordinate2D? {
+    func getParkingLocation() -> CLLocationWithAccuracy? {
         guard let dict = UserDefaults.standard.object(forKey: Key.parkedLocation.rawValue) as? [String: Any] else {
            return nil
         }
-        guard let raw = CLLocation2DRaw.fromDictionary(dict) else {
+        guard let raw = CLLocationWithAccuracyRaw.fromDictionary(dict) else {
             return nil
         }
         return .init(raw)
@@ -45,12 +52,12 @@ extension LocalStorageService {
     }
 }
 
-fileprivate extension CLLocationCoordinate2D {
-    init(_ raw: CLLocation2DRaw) {
-        self.init(latitude: raw.lat, longitude: raw.long)
+fileprivate extension CLLocationWithAccuracy {
+    init(_ raw: CLLocationWithAccuracyRaw) {
+        self.init(location: .init(latitude: raw.lat, longitude: raw.long), accuracy: raw.accuracy)
     }
     
-    func toRaw() -> CLLocation2DRaw {
+    func toRaw() -> CLLocationWithAccuracyRaw {
         return .init(self)
     }
 }
