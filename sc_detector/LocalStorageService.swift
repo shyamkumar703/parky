@@ -44,11 +44,24 @@ class LocalStorageService {
     func clearParkingLocation() {
         UserDefaults.standard.removeObject(forKey: Key.parkedLocation.rawValue)
     }
+    
+    func getLogs() -> [String] {
+        (UserDefaults.standard.object(forKey: Key.logs.rawValue) as? [String]) ?? []
+    }
+    
+    @discardableResult
+    func appendLog(_ log: String) -> [String] {
+        var logs = getLogs()
+        logs.append(log)
+        UserDefaults.standard.set(logs, forKey: Key.logs.rawValue)
+        return logs
+    }
 }
 
 extension LocalStorageService {
     enum Key: String {
         case parkedLocation
+        case logs
     }
 }
 

@@ -20,10 +20,9 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 //        @Published private(set) var streetCleaningDate: Date? = Calendar.current.date(byAdding: .hour, value: 1, to: Date())
     @Published private(set) var streetCleaningDate: Date?
     @Published private(set) var isLoadingCleaningDate = false
+    @Published private(set) var userLocation: CLLocationCoordinate2D?
 
-
-    // DEBUG
-//    private let debugLocationManager = CLLocationManager()
+    private let userLocationManager = CLLocationManager()
 
     override init() {
         self.locationManager = Dependencies.locationManager
@@ -31,18 +30,31 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         self.apiService = Dependencies.apiService
         self.localStorageService = Dependencies.localStorageService
         super.init()
-//        debugLocationManager.delegate = self
+        userLocationManager.delegate = self
+    }
+
+    // MARK: - CLLocationManagerDelegate
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        userLocation = locations.last?.coordinate
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Logger.shared.error("User location error: \(error.localizedDescription)")
     }
 
     func onAppear() {
         self.currentParkingLocationWA = localStorageService.getParkingLocation()
+        if let loc = currentParkingLocationWA {
+            Logger.shared.info("App opened: restored parking at \(loc.location.latitude), \(loc.location.longitude)")
+        } else {
+            Logger.shared.info("App opened: no saved parking location")
+        }
         // 37.7749, -122.4194
         // 37.779129, -122.446135
-//        let loc = CLLocationCoordinate2DMake(37.779129, -122.446135)
+//        let loc = CLLocationCoordinate2DMake(37.778632, -122.446534)
 //        self.currentParkingLocationWA = .init(location: loc, accuracy: 10)
         calculateStreetCleaningDate()
-        // DEBUG: request location to simulate a nearby parked car
-//        debugLocationManager.requestLocation()
+        userLocationManager.requestLocation()
     }
     
     private func calculateStreetCleaningDate() {
@@ -54,15 +66,21 @@ class AppViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 self.isLoadingCleaningDate = false
                 switch result {
                 case .success(let streetCleaningTimes):
-                    self.streetCleaningDate = streetCleaningTimes.nextCleaning()
+                    self.streetCleaningDate = streetCleaningTimes.nextCleaning(near: currentParkingLocationWA.location)
+                    if let date = self.streetCleaningDate {
+                        Logger.shared.info("Next cleaning date resolved: \(date)")
+                    } else {
+                        Logger.shared.warning("No upcoming cleaning date found from \(streetCleaningTimes.count) schedules")
+                    }
                 case .failure(let error):
-                    print(error)
+                    Logger.shared.error("Failed to fetch cleaning times: \(error.localizedDescription)")
                 }
             }
         }
     }
     
     func onIMovedMyCarTapped() {
+        Logger.shared.info("User tapped 'I moved my car'")
         withAnimation {
             self.currentParkingLocationWA = nil
         }
@@ -88,15 +106,30 @@ struct ContentView: View {
     @StateObject private var vm = AppViewModel()
     @State private var isTimerPressed = false
     @State private var isButtonPressed = false
+    @State private var showDebugLogs = false
+    @State private var mapPosition: MapCameraPosition = .userLocation(fallback: .automatic)
 
-    private var mapPosition: MapCameraPosition {
-        if let parked = vm.currentParkingLocationWA?.location {
-            .camera(.init(centerCoordinate: parked, distance: 1000))
-        } else {
-            .userLocation(fallback: .automatic)
+    private func updateMapPosition() {
+        guard let parked = vm.currentParkingLocationWA?.location,
+              let user = vm.userLocation else {
+            if vm.currentParkingLocationWA == nil {
+                mapPosition = .userLocation(fallback: .automatic)
+            }
+            return
+        }
+        let midLat = (parked.latitude + user.latitude) / 2
+        let midLon = (parked.longitude + user.longitude) / 2
+        let latDelta = abs(parked.latitude - user.latitude) * 1.5
+        let lonDelta = abs(parked.longitude - user.longitude) * 1.5
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: midLat, longitude: midLon),
+            span: MKCoordinateSpan(latitudeDelta: max(latDelta, 0.005), longitudeDelta: max(lonDelta, 0.005))
+        )
+        withAnimation {
+            mapPosition = .region(region)
         }
     }
-    
+
     private func pillText(now: Date) -> String {
         guard vm.currentParkingLocationWA != nil else {
             return "No ticket risk"
@@ -142,7 +175,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Map(initialPosition: mapPosition) {
+            Map(position: $mapPosition) {
                 UserAnnotation()
                 if let parked = vm.currentParkingLocationWA?.location {
                     Marker("Parked", systemImage: "car.fill", coordinate: parked)
@@ -150,6 +183,18 @@ struct ContentView: View {
                 }
             }
             VStack(spacing: 16) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showDebugLogs = true
+                    } label: {
+                        Image(systemName: "ladybug.fill")
+                            .font(.body)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular, in: .circle)
+                }
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let text = pillText(now: context.date)
@@ -197,6 +242,15 @@ struct ContentView: View {
         }
         .onAppear {
             vm.onAppear()
+        }
+        .sheet(isPresented: $showDebugLogs) {
+            DebugLogView()
+        }
+        .onChange(of: vm.currentParkingLocationWA?.location.latitude) {
+            updateMapPosition()
+        }
+        .onChange(of: vm.userLocation?.latitude) {
+            updateMapPosition()
         }
     }
 }

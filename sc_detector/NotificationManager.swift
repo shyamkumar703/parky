@@ -11,7 +11,11 @@ class NotificationManager: NSObject {
     override init() {
         super.init()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { wasAuthorized, error in
-            // do something here?
+            if let error {
+                Logger.shared.error("Notification auth error: \(error.localizedDescription)")
+            } else {
+                Logger.shared.info("Notification auth: \(wasAuthorized ? "granted" : "denied")")
+            }
         }
         UNUserNotificationCenter.current().delegate = self
     }
@@ -25,6 +29,7 @@ class NotificationManager: NSObject {
     }
     
     func scheduleLocalNotification(title: String, subtitle: String, date: Date) {
+        Logger.shared.info("Scheduling notification for \(date): \(title)")
         let content = UNMutableNotificationContent()
         content.title = title
         content.subtitle = subtitle
